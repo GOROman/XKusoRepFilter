@@ -12,6 +12,24 @@ let myAndFollowersIds = new Set();
 // ハイライト済みのツイートIDを保存するセット
 let highlightedTweetIds = new Set();
 
+// 爆発エフェクト用のスタイルシートを作成（パフォーマンス改善）
+// 各パーティクルごとにスタイルシートを作成するのではなく、
+// 一度だけグローバルなスタイルシートを作成し、CSS変数で個別の動きを制御する
+const explosionStyleSheet = document.createElement('style');
+explosionStyleSheet.textContent = `
+  @keyframes explosion-particle {
+    0% {
+      transform: translate(-50%, -50%);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(var(--end-x), var(--end-y));
+      opacity: 0;
+    }
+  }
+`;
+document.head.appendChild(explosionStyleSheet);
+
 // 設定を読み込む
 function loadSettings() {
   chrome.storage.sync.get(['blockWords', 'showConfirmDialog', 'showExplosionEffect'], function(result) {
@@ -202,7 +220,7 @@ function createExplosionEffect(tweet) {
     const endX = startX + (Math.random() - 0.5) * rect.width * 1.5;
     const endY = startY + (Math.random() - 0.5) * rect.height * 1.5;
     
-    // CSSアニメーションを適用
+    // CSSアニメーションを適用（CSS変数を使用）
     fragment.style.cssText = `
       position: absolute;
       width: ${size}px;
@@ -212,26 +230,12 @@ function createExplosionEffect(tweet) {
       top: ${startY}px;
       border-radius: 50%;
       transform: translate(-50%, -50%);
+      --end-x: ${endX - startX}px;
+      --end-y: ${endY - startY}px;
       animation: explosion-particle 600ms ease-out forwards;
     `;
     
-    // インラインスタイルでアニメーションを定義
-    const styleSheet = document.createElement('style');
-    styleSheet.textContent = `
-      @keyframes explosion-particle {
-        0% {
-          transform: translate(-50%, -50%);
-          opacity: 1;
-        }
-        100% {
-          transform: translate(${endX - startX}px, ${endY - startY}px);
-          opacity: 0;
-        }
-      }
-    `;
-    
-    // スタイルと破片を追加
-    container.appendChild(styleSheet);
+    // 破片をコンテナに追加
     container.appendChild(fragment);
   }
   
