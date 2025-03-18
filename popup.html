@@ -17,6 +17,7 @@
       --success-color: #00ba7c;
       --highlight-color: #ffad1f;
       --error-color: #f4212e;
+      --footer-color: #5a6772; /* より高いコントラスト比のフッターカラー */
     }
 
     @media (prefers-color-scheme: dark) {
@@ -25,6 +26,7 @@
         --bg-color: #15202b;
         --secondary-bg: #1e2732;
         --border-color: #38444d;
+        --footer-color: #a0a8b0; /* ダークモードでのより高いコントラスト比 */
       }
     }
 
@@ -154,6 +156,11 @@
       transform: translateX(20px);
     }
 
+    /* フォーカス状態のスタイルを追加 */
+    input:focus + .slider {
+      box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.4);
+    }
+
     .button-container {
       display: flex;
       justify-content: center;
@@ -176,6 +183,11 @@
       background-color: var(--primary-hover);
       transform: translateY(-1px);
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    button:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(29, 155, 240, 0.4);
     }
 
     button:active {
@@ -201,8 +213,21 @@
     .footer {
       margin-top: 20px;
       font-size: 12px;
-      color: #71767b;
+      color: var(--footer-color);
       text-align: center;
+    }
+
+    /* スクリーンリーダー用のクラス */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
     }
   </style>
 </head>
@@ -214,37 +239,38 @@
 
   <div class="form-group">
     <label for="blockWords">ブロックする文字列（1行に1つ）:</label>
-    <textarea id="blockWords" placeholder="例: しばらく観察していると"></textarea>
+    <textarea id="blockWords" placeholder="例: しばらく観察していると" aria-describedby="blockWordsHelp"></textarea>
+    <div id="blockWordsHelp" class="sr-only">ブロックしたい文字列を1行に1つずつ入力してください。</div>
   </div>
 
   <div class="form-group">
     <div class="checkbox-container">
-      <label class="toggle">
-        <input type="checkbox" id="showConfirmDialog" checked>
+      <label class="toggle" aria-hidden="true">
+        <input type="checkbox" id="showConfirmDialog" checked aria-labelledby="confirmDialogLabel">
         <span class="slider"></span>
       </label>
-      <label for="showConfirmDialog">ブロック前に確認ダイアログを表示する</label>
+      <label for="showConfirmDialog" id="confirmDialogLabel">ブロック前に確認ダイアログを表示する</label>
     </div>
   </div>
 
   <div class="form-group">
     <div class="checkbox-container">
-      <label class="toggle">
-        <input type="checkbox" id="showExplosionEffect">
+      <label class="toggle" aria-hidden="true">
+        <input type="checkbox" id="showExplosionEffect" aria-labelledby="explosionEffectLabel">
         <span class="slider"></span>
       </label>
-      <label for="showExplosionEffect">ブロック時に爆発エフェクトを表示する</label>
+      <label for="showExplosionEffect" id="explosionEffectLabel">ブロック時に爆発エフェクトを表示する</label>
     </div>
   </div>
 
   <div class="button-container">
-    <button id="saveButton">保存</button>
+    <button id="saveButton" aria-live="polite">保存</button>
   </div>
 
-  <div id="status" class="status">設定を保存しました！</div>
+  <div id="status" class="status" role="status" aria-live="polite">設定を保存しました！</div>
 
   <div class="footer">
-    <p>XKusoRepFilter v1.2.2</p>
+    <p>XKusoRepFilter v1.3.6</p>
   </div>
 
   <script src="popup.js"></script>

@@ -53,8 +53,11 @@ function loadSettings() {
 
 // 自分のIDとフォロワーのIDを取得する関数
 function fetchMyAndFollowersIds() {
+  console.log('XKusoRepFilter: fetchMyAndFollowersIds - start fetching IDs');
+  
   // 自分のプロフィールリンクを探す
   const profileLinks = document.querySelectorAll('a[href^="/"][role="link"][aria-label]');
+  console.log('XKusoRepFilter: fetchMyAndFollowersIds - found profile links:', profileLinks.length);
   
   profileLinks.forEach(link => {
     const href = link.getAttribute('href');
@@ -70,14 +73,52 @@ function fetchMyAndFollowersIds() {
   
   // フォロワーリストはページから直接取得するのは難しいため、
   // タイムライン上でフォロー中のアカウントを検出します
-  const followingIndicators = document.querySelectorAll('span[data-testid="userFollowing"]');
+  // 複数の可能性のあるセレクタを試す
+  const possibleSelectors = [
+    'span[data-testid="userFollowing"]',
+    'div[data-testid="userFollowing"]',
+    'span[data-testid="socialContext"]',
+    'div[data-testid="socialContext"]',
+    'span:contains("フォロー中")',
+    'span:contains("Following")'
+  ];
   
-  followingIndicators.forEach(indicator => {
-    // フォロー中のアカウントのツイート要素を探す
-    const tweet = indicator.closest('article[data-testid="tweet"]');
-    if (tweet) {
-      // ツイートからユーザーIDを取得
-      const userLinks = tweet.querySelectorAll('a[role="link"][href^="/"]');
+  // すべてのツイートを取得
+  const tweets = document.querySelectorAll('article[data-testid="tweet"]');
+  console.log('XKusoRepFilter: fetchMyAndFollowersIds - found tweets:', tweets.length);
+  
+  // 各ツイートからユーザーIDを取得
+  tweets.forEach((tweet, index) => {
+    // ツイートからユーザーIDを取得
+    const userLinks = tweet.querySelectorAll('a[role="link"][href^="/"]');
+    
+    // フォロー中かどうかを確認
+    let isFollowing = false;
+    
+    // テキストコンテンツに「フォロー中」または「Following」が含まれているか確認
+    const tweetText = tweet.textContent || '';
+    if (tweetText.includes('フォロー中') || tweetText.includes('Following')) {
+      isFollowing = true;
+      console.log('XKusoRepFilter: fetchMyAndFollowersIds - found following text in tweet', index);
+    }
+    
+    // 各セレクタを試す
+    for (const selector of possibleSelectors) {
+      try {
+        const elements = tweet.querySelectorAll(selector);
+        if (elements.length > 0) {
+          isFollowing = true;
+          console.log('XKusoRepFilter: fetchMyAndFollowersIds - found following indicator with selector', selector, 'in tweet', index);
+          break;
+        }
+      } catch (e) {
+        // セレクタが無効な場合はスキップ
+        continue;
+      }
+    }
+    
+    // フォロー中のアカウントの場合、ユーザーIDを登録
+    if (isFollowing) {
       userLinks.forEach(link => {
         const href = link.getAttribute('href');
         if (href && href.startsWith('/') && !href.includes('/status/')) {
@@ -281,10 +322,13 @@ function blockTweet(tweet, tweetText) {
 function isMyOrFollowersTweet(tweet) {
   // ツイートからユーザーIDを取得
   const userLinks = tweet.querySelectorAll('a[role="link"][href^="/"]');
+  console.log('XKusoRepFilter: isMyOrFollowersTweet - userLinks count:', userLinks.length);
+  
   for (const link of userLinks) {
     const href = link.getAttribute('href');
     if (href && href.startsWith('/') && !href.includes('/status/')) {
       const userId = href.replace('/', '');
+      console.log('XKusoRepFilter: isMyOrFollowersTweet - checking userId:', userId, 'is in myAndFollowersIds:', myAndFollowersIds.has(userId));
       // 自分またはフォロワーのIDかチェック
       if (myAndFollowersIds.has(userId)) {
         return true;
@@ -297,16 +341,23 @@ function isMyOrFollowersTweet(tweet) {
 // ツイート内の特定の文字列をハイライトする関数
 function highlightBlockWords(tweet, matchedWord) {
   try {
+    console.log('XKusoRepFilter: highlightBlockWords - start highlighting for word:', matchedWord);
+    
     // すでにハイライト済みの場合はスキップ
     const tweetId = getTweetId(tweet);
-    if (highlightedTweetIds.has(tweetId)) return;
+    if (highlightedTweetIds.has(tweetId)) {
+      console.log('XKusoRepFilter: highlightBlockWords - already highlighted, skipping:', tweetId);
+      return;
+    }
     
     // 先にハイライト済みとしてマークしておく（重複処理防止）
     highlightedTweetIds.add(tweetId);
+    console.log('XKusoRepFilter: highlightBlockWords - marked as highlighted:', tweetId);
     
     // ツイートの背景色を薄い赤色に変更（全体をハイライト）
     tweet.style.backgroundColor = 'rgba(255, 0, 0, 0.1)';
     tweet.style.borderLeft = '3px solid red';
+    console.log('XKusoRepFilter: highlightBlockWords - applied background style');
     
     // テキストノードを探す
     const textNodes = [];
@@ -318,18 +369,23 @@ function highlightBlockWords(tweet, matchedWord) {
       }
     }
     
+    console.log('XKusoRepFilter: highlightBlockWords - found text nodes:', textNodes.length);
+    
     // テキストノードが見つからない場合は、全体を再スキャン
     if (textNodes.length === 0) {
+      console.log('XKusoRepFilter: highlightBlockWords - no text nodes found, will retry after delay');
       // ツイートの内容が変わった可能性があるため、少し待ってから再試行
       setTimeout(() => {
         const walker = document.createTreeWalker(tweet, NodeFilter.SHOW_TEXT, null, false);
         let node;
+        const retryTextNodes = [];
         while (node = walker.nextNode()) {
           if (node.textContent && node.textContent.includes(matchedWord)) {
-            textNodes.push(node);
+            retryTextNodes.push(node);
           }
         }
-        processTextNodes(textNodes, matchedWord);
+        console.log('XKusoRepFilter: highlightBlockWords - retry found text nodes:', retryTextNodes.length);
+        processTextNodes(retryTextNodes, matchedWord);
       }, 500);
     } else {
       processTextNodes(textNodes, matchedWord);
@@ -341,17 +397,27 @@ function highlightBlockWords(tweet, matchedWord) {
   
 // テキストノードを処理する関数
 function processTextNodes(textNodes, matchedWord) {
+  console.log('XKusoRepFilter: processTextNodes - processing nodes:', textNodes?.length, 'for word:', matchedWord);
   if (!textNodes || textNodes.length === 0) return;
   
-  textNodes.forEach(textNode => {
+  textNodes.forEach((textNode, index) => {
     try {
       // テキストノードがドキュメントに存在しない場合はスキップ
-      if (!textNode.parentNode) return;
+      if (!textNode.parentNode) {
+        console.log('XKusoRepFilter: processTextNodes - node', index, 'has no parent, skipping');
+        return;
+      }
       
       const text = textNode.textContent;
-      if (!text || !text.includes(matchedWord)) return;
+      if (!text || !text.includes(matchedWord)) {
+        console.log('XKusoRepFilter: processTextNodes - node', index, 'does not contain match word, skipping');
+        return;
+      }
+      
+      console.log('XKusoRepFilter: processTextNodes - processing node', index, 'with text:', text.substring(0, 30) + (text.length > 30 ? '...' : ''));
       
       const parts = text.split(matchedWord);
+      console.log('XKusoRepFilter: processTextNodes - split into', parts.length, 'parts');
       
       if (parts.length > 1) {
         const fragment = document.createDocumentFragment();
@@ -371,11 +437,13 @@ function processTextNodes(textNodes, matchedWord) {
             highlight.style.fontWeight = 'bold';
             highlight.className = 'xkuso-highlight';
             fragment.appendChild(highlight);
+            console.log('XKusoRepFilter: processTextNodes - added highlight span for:', matchedWord);
           }
         }
         
         // 元のテキストノードをハイライト付きのフラグメントで置き換え
         textNode.parentNode.replaceChild(fragment, textNode);
+        console.log('XKusoRepFilter: processTextNodes - replaced text node with highlighted fragment');
       }
     } catch (error) {
       console.error('XKusoRepFilter: テキストノード処理中にエラーが発生しました', error);
@@ -387,30 +455,42 @@ function processTextNodes(textNodes, matchedWord) {
 function filterTweets() {
   // タイムラインの各ツイート要素を取得
   const tweets = document.querySelectorAll('article[data-testid="tweet"]');
+  console.log('XKusoRepFilter: filterTweets - found tweets:', tweets.length);
   
-  tweets.forEach(tweet => {
+  tweets.forEach((tweet, index) => {
     // すでに処理済みの場合はスキップ
-    if (tweet.dataset.filtered) return;
+    if (tweet.dataset.filtered) {
+      console.log('XKusoRepFilter: filterTweets - tweet', index, 'already filtered as:', tweet.dataset.filtered);
+      return;
+    }
     
     // ツイートのテキスト内容を取得
     const tweetText = tweet.textContent || '';
+    const shortText = tweetText.substring(0, 30) + (tweetText.length > 30 ? '...' : '');
+    console.log('XKusoRepFilter: filterTweets - processing tweet', index, 'text:', shortText);
     
     // ブロックワードが含まれているかチェック
     let matchedWord = null;
     for (const word of blockWordsList) {
       if (tweetText.includes(word)) {
         matchedWord = word;
+        console.log('XKusoRepFilter: filterTweets - found match for word:', word);
         break;
       }
     }
     
     if (matchedWord) {
       // 自分またはフォロワーのツイートはブロックせずにハイライトする
-      if (isMyOrFollowersTweet(tweet)) {
+      const isMyOrFollower = isMyOrFollowersTweet(tweet);
+      console.log('XKusoRepFilter: filterTweets - isMyOrFollowersTweet result:', isMyOrFollower);
+      
+      if (isMyOrFollower) {
+        console.log('XKusoRepFilter: filterTweets - highlighting own/follower tweet');
         highlightBlockWords(tweet, matchedWord);
         tweet.dataset.filtered = 'highlighted';
       } else {
         // 自分とフォロワー以外のツイートはブロック対象
+        console.log('XKusoRepFilter: filterTweets - blocking non-follower tweet');
         if (showConfirmDialog) {
           // 確認ダイアログを表示
           showBlockConfirmation(tweet, tweetText, matchedWord);

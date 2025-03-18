@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const saveButton = document.getElementById('saveButton');
   const statusMessage = document.getElementById('status');
   const formGroups = document.querySelectorAll('.form-group');
+  const toggleInputs = document.querySelectorAll('.toggle input[type=checkbox]');
   
   // フォームグループにアニメーション効果を追加
   formGroups.forEach((group, index) => {
@@ -22,6 +23,19 @@ document.addEventListener('DOMContentLoaded', function() {
       group.style.opacity = '1';
       group.style.transform = 'translateY(0)';
     }, 100 * (index + 1));
+  });
+  
+  // キーボードナビゲーションのサポートを追加
+  toggleInputs.forEach(checkbox => {
+    checkbox.addEventListener('keydown', function(e) {
+      // スペースキーまたはEnterキーでトグルを切り替え
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        this.checked = !this.checked;
+        // 変更イベントを発火させて、リスナーに通知
+        this.dispatchEvent(new Event('change'));
+      }
+    });
   });
   
   // 保存されている設定を読み込む
@@ -46,13 +60,23 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   
   // 保存ボタンのクリックイベント
-  saveButton.addEventListener('click', function() {
+  saveButton.addEventListener('click', saveSettings);
+  
+  // Enterキーでも保存できるようにする
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      saveSettings();
+    }
+  });
+  
+  // 設定を保存する関数
+  function saveSettings() {
     // ボタンにクリックエフェクト
-    this.classList.add('clicked');
+    saveButton.classList.add('clicked');
     
     // ボタンのテキストを変更
-    const originalText = this.textContent;
-    this.textContent = '保存中...';
+    const originalText = saveButton.textContent;
+    saveButton.textContent = '保存中...';
     
     const blockWords = blockWordsTextarea.value;
     const showConfirmDialog = showConfirmDialogCheckbox.checked;
@@ -89,7 +113,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 300);
       }, 2000);
     });
-  });
+  }
   
   // バージョン情報を表示
   const manifestData = chrome.runtime.getManifest();
