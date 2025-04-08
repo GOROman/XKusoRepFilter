@@ -1,0 +1,141 @@
+name: Chrome ウェブストア公開
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '拡張機能のバージョン（例：1.4.3）'
+        required: true
+      release_notes:
+        description: 'リリースノート'
+        required: true
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Node.jsのセットアップ
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: 依存関係のインストール
+      run: |
+        npm init -y
+        npm install --save-dev @babel/core @babel/preset-env babel-loader webpack webpack-cli zip-webpack-plugin clean-webpack-plugin copy-webpack-plugin eslint@8.57.0
+
+    - name: マニフェストのバージョン更新
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        # jqを使用してmanifest.jsonのバージョンを更新
+        jq '.version = "${{ github.event.inputs.version }}"' manifest.json > manifest.json.tmp
+        mv manifest.json.tmp manifest.json
+
+    - name: webpackの設定ファイル作成
+      run: |
+        cat > webpack.config.js << 'EOL'
+        const path = require('path');
+        const ZipPlugin = require('zip-webpack-plugin');
+        const { CleanWebpackPlugin } = require('clean-webpack-plugin');
+        const CopyPlugin = require('copy-webpack-plugin');
+        const manifest = require('./manifest.json');
+
+        module.exports = {
+          mode: 'production',
+          entry: {
+            background: './background.js',
+            content: './content.js',
+            popup: './popup.js'
+          },
+          output: {
+            path: path.resolve(__dirname, 'dist'),
+            filename: '[name].js'
+          },
+          module: {
+            rules: [
+              {
+                test: /\.js$/,
+                exclude: /node_modules/,
+                use: {
+                  loader: 'babel-loader',
+                  options: {
+                    presets: ['@babel/preset-env']
+                  }
+                }
+              }
+            ]
+          },
+          plugins: [
+            new CleanWebpackPlugin(),
+            new CopyPlugin({
+              patterns: [
+                { from: 'manifest.json', to: '.' },
+                { from: 'popup.html', to: '.' },
+                { from: 'icons', to: 'icons' },
+                { from: 'icon.png', to: '.' }
+              ],
+            }),
+            new ZipPlugin({
+              filename: `XKusoRepFilter-v${manifest.version}.zip`
+            })
+          ]
+        };
+        EOL
+
+    - name: ビルド
+      run: npx webpack
+
+    - name: Chrome ウェブストア用ZIPファイル作成
+      run: |
+        cd dist
+        zip -r chrome-store-package.zip *
+        ls -la
+
+    - name: 成果物のアップロード
+      uses: actions/upload-artifact@v4
+      with:
+        name: chrome-webstore-package
+        path: dist/chrome-store-package.zip
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: 成果物のダウンロード
+      uses: actions/download-artifact@v4
+      with:
+        name: chrome-webstore-package
+        path: ./
+
+    - name: Chrome ウェブストアに公開
+      uses: mnao305/chrome-extension-upload@v4.0.1
+      with:
+        file-path: chrome-store-package.zip
+        extension-id: ${{ secrets.EXTENSION_ID }}
+        client-id: ${{ secrets.CLIENT_ID }}
+        client-secret: ${{ secrets.CLIENT_SECRET }}
+        refresh-token: ${{ secrets.REFRESH_TOKEN }}
+        publish: true
+        publish-target: default
+
+    - name: リリースノートの作成
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        echo "${{ github.event.inputs.release_notes }}" > release_notes.txt
+
+    - name: リリースノートの取得
+      if: github.event_name == 'release'
+      run: |
+        echo "${{ github.event.release.body }}" > release_notes.txt
+
+    - name: 公開完了通知
+      run: |
+        echo "Chrome ウェブストアへの公開が完了しました"
+        echo "バージョン: ${{ github.event.inputs.version || github.event.release.tag_name }}"
+        echo "リリースノート:"
+        cat release_notes.txt
