@@ -30,7 +30,7 @@
     "clean-webpack-plugin": "^4.0.0",
     "copy-webpack-plugin": "^13.0.0",
     "web-ext": "^8.4.0",
-    "webpack": "^5.90.3",
+    "webpack": "^5.99.5",
     "webpack-cli": "^6.0.1",
     "zip-webpack-plugin": "^4.0.1"
   }
