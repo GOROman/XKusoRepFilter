@@ -31,7 +31,7 @@
     "copy-webpack-plugin": "^14.0.0",
     "web-ext": "^10.0.0",
     "webpack": "^5.105.3",
-    "webpack-cli": "^6.0.1",
+    "webpack-cli": "^7.0.0",
     "zip-webpack-plugin": "^4.0.1"
   }
 }
